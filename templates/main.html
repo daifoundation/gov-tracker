@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+     {% include 'head.html' %}
+</head>
+<body>
+    <div class="dashboard">
+
+        <div class="header shadow">
+            {% include 'header.html' %}
+        </div>
+
+        <div class="split-contents">
+            <div class="left_panel shadow">
+
+                <div id="data_html">
+                    <div>
+                        <div class="loader" style="margin-top: 40%; margin-left: auto; margin-right: auto;"></div>
+                    </div>
+                </div>
+
+            </div>
+            <div class="right_panel shadow">
+                <div id="table_container" style="visibility: hidden;">
+                    <div><h3 style="margin-top: 2px; ">Voters <span id='list_num'></span>:</h3></div>
+                    <div class="right-box">
+                        <table id="sorted-table" class="display nowrap">
+                            <thead>
+                                <tr>
+                                    <th>Address</th>
+                                    <th>Stake<br>(MKR)</th>
+                                    <th>Current votes</th>
+                                    <th>Since</th>
+                                    <th>Last voting</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
+                </div>
+                <div id='cover' class="loader" style="margin-top: 20%; margin-left: auto; margin-right: auto;"></div>
+            </div>
+        </div>
+
+        <div class="footer shadow">
+            {% include 'footer.html' %}
+        </div>
+
+    </div>
+
+    <script>
+
+        $(document).ready(function() {
+
+            $.ajax({
+                url: "/data/main",
+                method: 'get',
+                dataType: 'json',
+                contentType: 'application/json',
+                success: function (msg) {
+
+                    if (msg.status === "success") {
+
+                        const data = msg.data
+
+                        $('#sorted-table').DataTable( {
+                            data: data['voters'],
+                            autoWidth: false,
+                            columns: [
+                                { data: "VOTER" },
+                                { data: "STAKE", width: '75px' },
+                                { data: "CURRENT_VOTES" },
+                                { data: "SINCE", width: '65px' },
+                                { data: "LAST", width: '120px' }
+                            ],
+                            order: [[ 1, "desc" ]],
+                            lengthMenu: [[20, 50, 100, -1], [20, 50, 100, "All"]],
+                            pageLength: 20,
+                            dom: 'lBfrtip',
+                            buttons: [ {
+                                extend: 'csv',
+                                text: 'Export to CSV',
+                                filename: 'Voters',
+                                exportOptions: {
+                                    modifier: {
+                                        search: 'none'
+                                    }
+                                }
+                            } ]
+                        });
+
+                        $( "#sorted-table" ).removeClass();
+                        $( "#sorted-table" ).addClass("simple-table");
+                        $( "#sorted-table" ).addClass("dataTable");
+                        $( "#sorted-table" ).addClass("no-footer");
+                        $( "#cover" ).css("display", "none");
+                        $( "#table_container" ).css("visibility", "visible");
+
+                        $("#data_html").html(`
+                            <div class="kpi shadow">
+                                <div class="inner_left">
+                                    <div class="kpi_label">Staked MKR:</div>
+                                    <span class="expose">` + data['staked'] + `</span> MKR<br>
+                                </div>
+                                <div class="inner_right">
+                                    <div class="right-bottom" style="font-size: 12px;">
+                                        Active voters: <b>` + data['active'] + `</b> (with stake > 0)<br>
+                                        Last vote: <b>` + data['last_vote'] + `</b> UTC<br>
+                                    </div>
+                                </div>
+                            </div>
+                            <div><h3 style="margin-top: 15px; ">Executive votes (` + data['yays_num'] + `)</h3></div>
+                            <div class="left-box" style="border-bottom: 1px solid #aaaaaa; margin-top: -30px;">
+                                ` + data['yays'] + `
+                            </div>
+                            <div><h3 style="margin-top: 15px; ">Governance polls (` + data['polls_num'] + `)</h3></div>
+                            <div class="left-box" style="border-bottom: 1px solid #aaaaaa; margin-top: -30px;">
+                                ` + data['polls'] + `
+                            </div>
+                        `);
+
+                        $( "#data_html" ).css("display", "contents");
+
+                        $( "#list_num" ).text(" (" + data['voters_num'] + ")");
+
+                        $('#executives-table').DataTable( {
+                            responsive: true,
+                            paging: false,
+                            bInfo : false,
+                            searching: true,
+                            order: [[ 1, "desc" ]]
+                        } );
+
+                        $('#polls-table').DataTable( {
+                            responsive: true,
+                            paging: false,
+                            bInfo : false,
+                            searching: true,
+                            order: [[ 1, "desc" ]]
+                        } );
+
+                        $('#polls-table tr').each(function() {
+                            var is_active = $(this).find("td:last").html();
+                            if (is_active === '1') {
+                                $(this).addClass('row_expose');
+                            };
+                            $(this).find("th:last").remove();
+                            $(this).find("td:last").remove();
+                        });
+
+                     } else {
+                        const error_message = `
+                        <div style="padding: 10px; margin-bottom: 50px">
+                            <h2>Problem while fetching data :(<br>
+                            Please try again</h2>
+                        </div>`;
+                        $( "#data_html" ).html(error_message);
+                        $( "#table_container" ).html(error_message);
+                    }
+
+                },
+                error: function (ex) {
+                    const error_message = `
+                    <div style="padding-left: 50px; margin-top: 50px; margin-bottom: 50px">
+                        <h2>Something went wrong :(<br>
+                        Try again later</h2>
+                    </div>`;
+                    $( "#dashboard" ).html(error_message);
+                }
+            });
+        });
+
+    </script>
+
+</body>
+</html>

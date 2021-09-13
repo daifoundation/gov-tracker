@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+     {% include 'head.html' %}
+</head>
+<body>
+    <div class="dashboard">
+
+        <div class="header shadow">
+            {% include 'header.html' %}
+        </div>
+
+        <div class="split-contents">
+            <div class="left_panel shadow">
+
+                <div class="kpi shadow">
+                    <div class="inner_left">
+                        <div class="kpi_label">Executive vote:</div>
+                        <div><h3 style="margin-top: 2px; margin-bottom: 15px;">{{ title }}</h3></div>
+                    </div>
+                </div>
+
+                <div id="data_html">
+                    <div>
+                        <div class="loader" style="margin-top: 40%; margin-left: auto; margin-right: auto;"></div>
+                    </div>
+                </div>
+
+                <div class="left-box" style="height: fit-content; padding-bottom: 0;">
+                    <div class="chart" id="graph1">
+                        <script>
+                            let graph1 = {{ plot }};
+                            Plotly.plot('graph1', graph1, {});
+                        </script>
+                    </div>
+                </div>
+
+                <div id="voters-table" style="margin-top: 0; display: none">
+                    <h3 style="margin-top: 0;">Top supporters:</h3>
+                    <div class="left-box" id="voters-list"></div>
+                </div>
+
+            </div>
+
+            <div class="right_panel shadow">
+                <div id="table_container" style="visibility: hidden;">
+                    <div><h3 style="margin-top: 2px; ">Voting history <span id='list_num'></span>:</h3></div>
+                    <div class="right-box">
+                        <table id="sorted-table" class="display nowrap" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Address</th>
+                                    <th>Operation</th>
+                                    <th>Vote</th>
+                                    <th>Deci-<br>sive</th>
+                                    <th>Approval<br>(MKR)</th>
+                                    <th>Hat</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
+                </div>
+                <div id='cover' class="loader" style="margin-top: 20%; margin-left: auto; margin-right: auto;"></div>
+            </div>
+        </div>
+        <div class="footer shadow">
+            {% include 'footer.html' %}
+        </div>
+    </div>
+
+    <script>
+
+        $(document).ready(function() {
+
+            const url = window.location.href;
+            const u = new URL(url);
+            const yay = (u.pathname.substring(u.pathname.lastIndexOf('/') + 1));
+
+            $.ajax({
+                url: "/data/yay/" + yay,
+                method: 'get',
+                dataType: 'json',
+                contentType: 'application/json',
+                success: function (msg) {
+
+                    if (msg.status === "success") {
+
+                        const data = msg.data
+
+                        $('#sorted-table').DataTable( {
+                            data: data['operations'],
+                            autoWidth: false,
+                            columns: [
+                                { data: "TIME", width: '120px'  },
+                                { data: "ADDRESS"  },
+                                { data: "OPERATION", width: '65px' },
+                                { data: "VOTE", width: '75px' },
+                                { data: "DECISIVE", width: '40px' },
+                                { data: "APPROVAL", width: '75px' },
+                                { data: "HAT", width: '30px' }
+                            ],
+                            columnDefs: [
+                                {
+                                targets: 0,
+                                render: function( data ) {
+                                    const x = data;
+                                    return '<span>' + x.substring(0, 19) + '</span><span style=\'display: none;\'>' + x.substring(19, x.length) + '</span>';
+                                    }
+                                }
+                            ],
+                            order: [[ 0, "desc" ]],
+                            lengthMenu: [[20, 50, 100, -1], [20, 50, 100, "All"]],
+                            pageLength: 20,
+                            dom: 'lBfrtip',
+                            buttons: [ {
+                                extend: 'csv',
+                                text: 'Export to CSV',
+                                filename: 'Operations',
+                                exportOptions: {
+                                    modifier: {
+                                        search: 'none'
+                                    }
+                                }
+                            }],
+                            rowCallback( row, data ) {
+                                if( data['HAT'] === `YES` ) {
+                                    $(row).addClass('row_expose');
+                                }
+                            },
+                            initComplete: function() {
+                                if (this.api().page.info().pages <= 1) {
+                                    $('#sorted-table_length').hide();
+                                    $('#sorted-table_paginate').hide();
+                                    $('#sorted-table_info').hide();
+                                }
+                                if (this.api().page.info().pages === 0) {
+                                    $('#sorted-table_filter').hide();
+                                }
+                            }
+                        });
+
+                        $( "#sorted-table" ).removeClass();
+                        $( "#sorted-table" ).addClass("simple-table");
+                        $( "#sorted-table" ).addClass("dataTable");
+                        $( "#sorted-table" ).addClass("no-footer");
+                        $( "#cover" ).css("display", "none");
+                        $( "#table_container" ).css("visibility", "visible");
+
+                        const plot = JSON.parse(data.plot);
+                        Plotly.newPlot('graph1', plot.data, plot.layout);
+
+                        $( "#data_html" ).html(`
+                            <div class="kpi shadow">
+                                <div class="inner_left">
+                                    <div class="kpi_label">Current approval:</div>
+                                    <span class="expose">` + data['approval'] + `</span> MKR<br>
+                                </div>
+                                <div class="inner_right">
+                                    <div class="right-bottom" style="font-size: 12px;">
+                                        Since: <b>` + data['since'] + `</b><br>
+                                        Unique voting addresses: <b>` + data['num_voters'] + `</b><br>
+                                        Last vote: <b>` + data['last_vote'] + `</b> UTC
+                                    </div>
+                                </div>
+                            </div>
+                        `);
+                        $( "#data_html" ).css("display", "contents");
+                        $( "#voters-list" ).html(data['top_voters']);
+                        $( "#voters-table" ).css("display", "contents");
+
+                        $( "#list_num" ).text(" (" + data['operations_num'] + ")");
+
+                     } else {
+                        const error_message = `
+                        <div style="padding: 10px; margin-bottom: 50px">
+                            <h2>Problem while fetching data :(<br>
+                            Please try again</h2>
+                        </div>`;
+                        $( "#data_html" ).html(error_message);
+                        $( "#table_container" ).html(error_message);
+                    }
+                },
+                error: function (ex) {
+                    const error_message = `
+                    <div style="padding-left: 50px; margin-top: 50px; margin-bottom: 50px">
+                        <h2>Something went wrong :(<br>
+                        Try again later</h2>
+                    </div>`;
+                    $( "#dashboard" ).html(error_message);
+                }
+            });
+        });
+
+    </script>
+
+</body>
+</html>

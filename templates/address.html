@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+     {% include 'head.html' %}
+</head>
+<body>
+    <div class="dashboard">
+
+        <div class="header shadow">
+            {% include 'header.html' %}
+        </div>
+
+        <div class="split-contents">
+            <div class="left_panel shadow">
+
+                <div class="kpi shadow">
+                    <div class="inner_left">
+                        <div class="kpi_label">Voting address:</div>
+                        <div><h3 style="margin-top: 2px; margin-bottom: 2px;">{{ address }}<br>
+                        </h3></div>
+                        {% if vote_proxy != '' %}
+                            <div class="kpi_label">
+                                <div style="margin-top: 4px;">Uses Vote Proxy:</div>
+                            </div>
+                            <div><h4 style="margin-top: 4px; margin-bottom: 2px;"><a style="text-decoration: none;" href="/proxy/{{ vote_proxy }}">{{ vote_proxy }}</a><br>
+                            </h4></div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="kpi shadow">
+                    <div class="inner_left">
+                        <div class="kpi_label">Current stake:</div>
+                        <span class="expose">{{ stake }}</span> MKR<br>
+                    </div>
+                    <div class="inner_right">
+                        <div class="right-bottom" style="font-size: 12px;">
+                            Etherscan: <a target="_blank" href="https://etherscan.io/address/{{ address }}">{{ address | truncate(26) }}</a><br>
+                            Last vote: <b>{{ last_vote }}</b> UTC<br>
+                            Present since: <b>{{ since }}</b><br>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="data_html">
+                    <div>
+                        <div class="loader" style="margin-top: 30%; margin-left: auto; margin-right: auto;"></div>
+                    </div>
+                </div>
+
+                <div id="graph-box" class="left-box">
+                    <div class="chart" id="graph1">
+                        <script>
+                            let graph1 = {{ plot }};
+                            Plotly.plot('graph1', graph1, {displayLogo: false});
+                        </script>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="right_panel shadow">
+                <div id="table_container" style="visibility: hidden;">
+                    <div><h3 style="margin-top: 2px; ">Operations <span id='list_num'></span>:</h3></div>
+                <div class="right-box">
+                        <table id="sorted-table" class="display nowrap">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Operation</th>
+                                    <th>Transfer<br>(MKR)</th>
+                                    <th>Stake<br>(MKR)</th>
+                                    <th>Executive/Poll</th>
+                                    <th>Options</th>
+                                    <th>Deci-<br>sive</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
+                </div>
+                <div id='cover' class="loader" style="margin-top: 20%; margin-left: auto; margin-right: auto;"></div>
+            </div>
+
+        </div>
+        <div class="footer shadow">
+            {% include 'footer.html' %}
+        </div>
+    </div>
+
+    <script>
+
+        $(document).ready(function() {
+
+            const url = window.location.href;
+            const u = new URL(url);
+            const address = (u.pathname.substring(u.pathname.lastIndexOf('/') + 1));
+
+            $.ajax({
+                url: "/data/address/" + address,
+                method: 'get',
+                dataType: 'json',
+                contentType: 'application/json',
+                success: function (msg) {
+
+                    if (msg.status === "success") {
+
+                        const data = msg.data
+
+                        $('#sorted-table').DataTable( {
+                            data: data['operations'],
+                            autoWidth: false,
+                            columns: [
+                                { data: "TIME", width: '120px' },
+                                { data: "OPERATION", width: '75px' },
+                                { data: "TRANSFER", width: '75px' },
+                                { data: "STAKE", width: '75px' },
+                                { data: "POLL" },
+                                { data: "OPTIONS", width: '70px' },
+                                { data: "DECISIVE", width: '40px' }
+                            ],
+                            columnDefs: [
+                                {
+                                targets: 0,
+                                render: function( data ) {
+                                    const x = data;
+                                    return '<span>' + x.substring(0, 19) + '</span><span style=\'display: none;\'>' + x.substring(19, x.length) + '</span>';
+                                    }
+                                }
+                            ],
+                            order: [[ 0, "desc" ]],
+                            lengthMenu: [[20, 50, 100, -1], [20, 50, 100, "All"]],
+                            pageLength: 20,
+                            dom: 'lBfrtip',
+                            buttons: [ {
+                                extend: 'csv',
+                                text: 'Export to CSV',
+                                filename: 'Operations',
+                                exportOptions: {
+                                    modifier: {
+                                        search: 'none'
+                                    }
+                                }
+                            }],
+                            rowCallback( row, data ) {
+                                if( data['DECISIVE'] === `YES`) {
+                                    $(row).addClass('row_expose');
+                                }
+                            },
+                            initComplete: function() {
+                                if (this.api().page.info().pages <= 1) {
+                                    $('#sorted-table_length').hide();
+                                    $('#sorted-table_paginate').hide();
+                                    $('#sorted-table_info').hide();
+                                }
+                                if (this.api().page.info().pages === 0) {
+                                    $('#sorted-table_filter').hide();
+                                }
+                            }
+                        });
+
+                        $( "#sorted-table" ).removeClass();
+                        $( "#sorted-table" ).addClass("simple-table");
+                        $( "#sorted-table" ).addClass("dataTable");
+                        $( "#sorted-table" ).addClass("no-footer");
+                        $( "#cover" ).css("display", "none");
+                        $( "#table_container" ).css("visibility", "visible");
+
+                        $( "#data_html" ).html(``)
+                        $( "#data_html" ).css("display", "contents");
+
+                        const plot = JSON.parse(data.plot);
+                        Plotly.newPlot('graph1', plot.data, plot.layout);
+
+                        $( "#list_num" ).text(" (" + data['operations_num'] + ")");
+
+                     } else {
+                        const error_message = `
+                        <div style="padding: 10px; margin-bottom: 50px">
+                            <h2>Problem while fetching data :(<br>
+                            Please try again</h2>
+                        </div>`;
+                        $( "#data_html" ).html(error_message);
+                        $( "#table_container" ).html(error_message);
+                    }
+
+                },
+                error: function (ex) {
+                    const error_message = `
+                    <div style="padding-left: 50px; margin-top: 50px; margin-bottom: 50px">
+                        <h2>Something went wrong :(<br>
+                        Try again later</h2>
+                    </div>`;
+                    $( "#dashboard" ).html(error_message);
+                }
+            });
+        });
+
+    </script>
+
+</body>
+</html>

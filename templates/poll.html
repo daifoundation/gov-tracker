@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% include 'head.html' %}
+</head>
+<body>
+<div class="dashboard">
+
+    <div class="header shadow">
+        {% include 'header.html' %}
+    </div>
+
+    <div class="split-contents">
+        <div class="left_panel shadow">
+
+            <div class="kpi shadow">
+                <div class="inner_left">
+                    <div class="kpi_label">Governance poll:</div>
+                    <div><h3 style="margin-top: 2px; margin-bottom: 20px;">{{ title }}</h3></div>
+                </div>
+            </div>
+
+            <div id="data_html">
+                <div>
+                    <div class="loader" style="margin-top: 40%; margin-left: auto; margin-right: auto;"></div>
+                </div>
+            </div>
+
+            <div id="options-table" style="display: none">
+                <div><h3>Options:</h3></div>
+                <div class="left-box" id="options-list">
+                </div>
+            </div>
+
+            <div id="non-valid" style="display: none">
+            </div>
+
+        </div>
+
+        <div class="right_panel shadow">
+            <div id="table_container" style="visibility: hidden;">
+                <div><h3 style="margin-top: 2px; ">Voting history <span id='list_num'></span>:</h3></div>
+                <div class="right-box">
+                    <table id="sorted-table" class="display nowrap">
+                        <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Address</th>
+                            <th>Proxy</th>
+                            <th>Operation</th>
+                            <th>Options</th>
+                            <th>Approval<br>(MKR)</th>
+                        </tr>
+                        </thead>
+                    </table>
+                </div>
+            </div>
+            <div id='cover' class="loader" style="margin-top: 20%; margin-left: auto; margin-right: auto;"></div>
+        </div>
+    </div>
+    <div class="footer shadow">
+        {% include 'footer.html' %}
+    </div>
+</div>
+
+<script>
+
+    $(document).ready(function () {
+
+        const url = window.location.href;
+        const u = new URL(url);
+        const poll = (u.pathname.substring(u.pathname.lastIndexOf('/') + 1));
+
+        $.ajax({
+            url: "/data/poll/" + poll,
+            method: 'get',
+            dataType: 'json',
+            contentType: 'application/json',
+            success: function (msg) {
+
+                if (msg.status === "success") {
+
+                    const data = msg.data
+
+                    $('#sorted-table').DataTable({
+                        data: data['operations'],
+                        autoWidth: false,
+                        columns: [
+                            {data: "TIME", width: '120px'},
+                            {data: "ADDRESS"},
+                            {data: "PROXY"},
+                            {data: "OPERATION", width: '75px'},
+                            {data: "OPTION", width: '110px'},
+                            {data: "APPROVAL", width: '75px'}
+                        ],
+                        order: [[0, "desc"]],
+                        lengthMenu: [[20, 50, 100, -1], [20, 50, 100, "All"]],
+                        pageLength: 20,
+                        dom: 'lBfrtip',
+                        buttons: [{
+                            extend: 'csv',
+                            text: 'Export to CSV',
+                            filename: 'Operations',
+                            exportOptions: {
+                                modifier: {
+                                    search: 'none'
+                                }
+                            }
+                        }],
+                        initComplete: function () {
+                            if (this.api().page.info().pages <= 1) {
+                                $('#sorted-table_length').hide();
+                                $('#sorted-table_paginate').hide();
+                                $('#sorted-table_info').hide();
+                            }
+                            if (this.api().page.info().pages === 0) {
+                                $('#sorted-table_filter').hide();
+                            }
+                        }
+                    });
+
+                    $("#sorted-table").removeClass();
+                    $("#sorted-table").addClass("simple-table");
+                    $("#sorted-table").addClass("dataTable");
+                    $("#sorted-table").addClass("no-footer");
+                    $("#cover").css("display", "none");
+                    $("#table_container").css("visibility", "visible");
+
+                    $("#data_html").html(`
+                        <div class="kpi shadow">
+                            <div class="inner_left">
+                                <div class="kpi_label">Approval:</div>
+                                <span class="expose">` + data['approval'] + `</span> MKR<br>
+                            </div>
+                            <div class="inner_right">
+                                <div class="right-bottom" style="font-size: 12px;">
+                                    Start: <b>` + data['poll_start'] + `</b><br>
+                                    End: <b>` + data['poll_end'] + `</b><br>
+                                    Unique voting addresses: <b>` + data['num_voters'] + `</b><br>
+                                    Last vote: <b>` + data['last_vote'] + `</b> UTC
+                                </div>
+                            </div>
+                        </div>
+                    `)
+
+                    $("#data_html").css("display", "contents");
+                    $("#options-list").html(data['options']);
+                    if (data['options']) {
+                        $("#options-table").css("display", "contents")
+                    }
+                    $("#list_num").text(" (" + data['operations_num'] + ")");
+
+                    if (data['not_valid_num'] > 0) {
+                        $("#non-valid").html(`
+                         <div><br><span class="expose"><b>Not valid:</b></span> <b>` + data['not_valid_num'] + `
+                         </b> votes / <b>` + data['not_valid_stake'] + `</b> MKR</div>
+                        `);
+                        $('#non-valid').css("display", "contents");
+                    }
+
+                } else {
+                    const error_message = `
+                        <div style="padding: 10px; margin-bottom: 50px">
+                            <h2>Problem while fetching data :(<br>
+                            Please try again</h2>
+                        </div>`;
+                    $("#data_html").html(error_message);
+                    $("#table_container").html(error_message);
+                }
+            },
+            error: function (ex) {
+                const error_message = `
+                    <div style="padding-left: 50px; margin-top: 50px; margin-bottom: 50px">
+                        <h2>Something went wrong :(<br>
+                        Try again later</h2>
+                    </div>`;
+                $("#dashboard").html(error_message);
+            }
+        });
+    });
+</script>
+
+</body>
+</html>
